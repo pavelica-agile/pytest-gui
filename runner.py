@@ -1,3 +1,10 @@
+"""! @file runner.py
+@brief Runner module for executing tests and handling their outputs in pytest-gui.
+
+This module provides functionalities to execute test cases, manage their outputs,
+and parse the results using subprocesses and threading.
+"""
+
 import json
 import subprocess
 import sys
@@ -14,10 +21,12 @@ import pipes
 
 
 def enqueue_output(out, queue):
-    """A utility method for consuming piped output from a subprocess.
+    """! A utility method for consuming piped output from a subprocess.
 
-    Reads content from `out` one line at a time, and puts it onto
-    queue for consumption in a separate thread.
+    @param out The output stream to read from
+    @param queue The queue to put the output lines into
+    @details Reads content from `out` one line at a time, and puts it onto
+             queue for consumption in a separate thread.
     """
     for line in iter(out.readline, b''):
         queue.put(line.strip().decode('utf-8'))
@@ -25,6 +34,11 @@ def enqueue_output(out, queue):
 
 
 def parse_status_and_error(post):
+    """! Parse the status and error information from the test result.
+
+    @param post The test result dictionary
+    @return A tuple containing the status code and error message
+    """
     if post['status'] == 'OK':
         status = TestMethod.STATUS_PASS
         error = None
@@ -48,8 +62,19 @@ def parse_status_and_error(post):
 
 
 class Runner(EventSource):
-    "A wrapper around the subprocess that executes tests."
+    """! A wrapper around the subprocess that executes tests.
+
+    @details This class manages the execution of tests using subprocesses,
+             capturing their outputs, and handling test result updates.
+    """
     def __init__(self, project, count, labels, testdir):
+        """! Initialize the Runner with the given project and test parameters.
+        
+        @param project The project instance containing the tests
+        @param count The total number of tests to execute
+        @param labels The specific test labels to run
+        @param testdir The directory containing the tests
+        """
         self.project = project
 
         self.proc = subprocess.Popen(
@@ -78,7 +103,7 @@ class Runner(EventSource):
         # The TestMethod object currently under execution.
         self.current_test = None
 
-        # An accumulator of ouput from the tests. If buffer is None,
+        # An accumulator of output from the tests. If buffer is None,
         # then the test suite isn't currently running - it's in suite
         # setup/teardown.
         self.buffer = None
@@ -100,19 +125,30 @@ class Runner(EventSource):
 
     @property
     def is_running(self):
-        "Return True if this runner currently running."
+        """! Check if the runner is currently running.
+
+        @return True if the runner is running, False otherwise
+        """
         return self.proc.poll() is None
 
     @property
     def any_failed(self):
+        """! Check if any tests have failed.
+
+        @return The count of failed tests
+        """
         return sum(self.result_count.get(state, 0) for state in TestMethod.FAILING_STATES)
 
     def terminate(self):
-        "Stop the executor."
+        """! Stop the executor.
+        """
         self.proc.terminate()
 
     def poll(self):
-        "Poll the runner looking for new test output"
+        """! Poll the runner looking for new test output.
+
+        @return True if the runner should continue polling, False otherwise
+        """
         stopped = False
         finished = False
 
@@ -145,7 +181,11 @@ class Runner(EventSource):
         # Process all the full lines that are available
         for line in lines:
             # Look for a separator.
-            if line in (pipes.PipedTestResult.RESULT_SEPARATOR, pipes.PipedTestRunner.START_TEST_RESULTS, pipes.PipedTestRunner.END_TEST_RESULTS):
+            if line in (
+                pipes.PipedTestResult.RESULT_SEPARATOR,
+                pipes.PipedTestRunner.START_TEST_RESULTS,
+                pipes.PipedTestRunner.END_TEST_RESULTS
+            ):
                 if self.buffer is None:
                     # Preamble is finished. Set up the line buffer.
                     self.buffer = []
@@ -270,23 +310,31 @@ class Runner(EventSource):
             # Still running - requeue event.
             return True
 
+
 import argparse
 import unittest
 
 
 class PyTestExecutor(object):
-    '''
-    This is a thing which, when run, produces a stream
-    of well-formed test result outputs. Its processing is
-    initiated by the top-level Runner class
-    '''
+    """! Executor class for running and streaming test results.
 
+    @details This class is responsible for initiating test execution and
+             streaming the results. It can handle specified test lists or
+             discover tests from a directory.
+    """
+    
     def __init__(self):
-
+        """! Initialize the PyTestExecutor.
+        """
         # Allows the executor to run a specified list of tests
         self.specified_list = None
 
     def flatten_results(self, iterable):
+        """! Flatten nested test results into a single list.
+
+        @param iterable The iterable containing nested test results
+        @return A generator yielding flattened test results
+        """
         input = list(iterable)
         while input:
             item = input.pop(0)
@@ -297,13 +345,25 @@ class PyTestExecutor(object):
                 yield item
 
     def run_only(self, specified_list):
+        """! Set the list of tests to run exclusively.
+
+        @param specified_list The list of test labels to run
+        """
         self.specified_list = specified_list
 
     def stream_suite(self, suite):
-        print ("Calling stream_suite: " + str(suite))
+        """! Stream the execution of the given test suite.
+
+        @param suite The test suite to execute
+        """
+        print("Calling stream_suite: " + str(suite))
         pipes.PipedTestRunner().run(suite)
 
     def stream_results(self, testdir=None):
+        """! Discover and stream test results from the specified directory.
+
+        @param testdir The directory to discover tests from
+        """
         if testdir is None:
             testdir = '.'
 
@@ -316,7 +376,6 @@ class PyTestExecutor(object):
             self.stream_suite(suite)
         else:
             suite = unittest.TestSuite()
-
 
             # Add individual test cases.
             for test in flat_tests:
@@ -341,6 +400,7 @@ class PyTestExecutor(object):
 
             self.stream_suite(suite)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--testdir', dest='testdir', default='.', help='Directory to choose tests from')
@@ -354,9 +414,6 @@ if __name__ == '__main__':
     if options.labels is not None:
         print('Labels: ', options.labels)
 
-
     if options.labels:
         executor.run_only(options.labels)
     executor.stream_results(options.testdir)
-
-
