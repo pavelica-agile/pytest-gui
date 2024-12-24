@@ -559,3 +559,6 @@ class UnittestProject(Project):
         @param labels List of test labels to execute
         @param testdir Directory containing tests
         @return List
+        """
+        args = [sys.executable, 'runner.py', '--testdir', testdir]
+        return args + labels
